@@ -1,56 +1,110 @@
 import streamlit as st
-from openai import OpenAI
+import openai
+from langchain.prompts import PromptTemplate
+from langchain.llms import OpenAI
+from langchain_core.runnables import RunnableBranch
+from langchain_core.output_parsers import StrOutputParser
+import os
 
-# Show title and description.
-st.title("💬 Chatbot")
-st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
+llm = OpenAI(openai_api_key=st.secrets["OpenAI_Key"])
+
+
+### Create the decision-making chain
+issue_template = """You are an expert at booking airline tickets.
+From the following review, determine whether the experience is one of the following three cases:
+* Positive: The customer is not facing any issues and is having a good experience.
+* NegativeFault: The customer is facing issues affecting their experience. The airline is responsible for the issue. For example, the airline lost the customer's luggage.
+* NegativeNoFault: The customer is facing issues affecting their experience. However, the airline is not responsible for the issue. For example, a delay was caused by the weather.
+
+Only respond with Positive, NegativeFault, or NegativeNoFault.
+
+Review:
+{review}
+
+"""
+issue_type_chain = (
+    PromptTemplate.from_template(issue_template)
+    | llm
+    | StrOutputParser()
 )
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+#### Case 1: Positive
+positive_chain = PromptTemplate.from_template(
+    """You are an experienced travel customer support agent.
+    Thank the customer for their review and for choosing to fly with the airline.
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+Your response should follow these guidelines:
+    1. Do not provide any reasoning behind the need for visa. Just respond professionally as a travel chat agent.
+    2. Address the customer directly.
+    3. You are answering as a bot. Don't leave your name or end with anything like "Best Regards".
 
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
 
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+Review:
+{review}
 
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
+"""
+) | llm
 
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+
+#### Case 2: NegativeNoFault
+nofault_chain = PromptTemplate.from_template(
+    """You are an experienced travel customer support agent.
+    Offer sympathies but explain to the customer that the airline is not liable in such situations.
+
+Your response should follow these guidelines:
+    1. Do not provide any reasoning behind the need for visa. Just respond professionally as a travel chat agent.
+    2. Address the customer directly.
+    3. You are answering as a bot. Don't leave your name or end with anything like "Best Regards".
+
+
+
+
+Review:
+{review}
+
+"""
+) | llm
+
+
+#### Case 3: NegativeFault
+fault_chain = PromptTemplate.from_template(
+    """You are an experienced travel customer support agent.
+    Display a message offering sympathies and inform the user that customer service will contact them soon to resolve the issue or provide compensation.
+
+Your response should follow these guidelines:
+    1. Do not provide any reasoning behind the need for visa. Just respond professionally as a travel chat agent.
+    2. Address the customer directly.
+    3. You are answering as a bot. Don't leave your name or end with anything like "Best Regards".
+
+
+
+
+Review:
+{review}
+
+"""
+) | llm
+
+
+
+### Put all the chains together
+branch = RunnableBranch(
+    (lambda x: "Positive" in x["issue_type"], positive_chain),
+    (lambda x: "NegativeNoFault" in x["issue_type"], nofault_chain),
+    lambda x: fault_chain,
+)
+full_chain = {"issue_type": issue_type_chain, "review": lambda x: x["review"]} | branch
+
+# streamlit app layout
+st.title("Airline Experience Feedback")
+prompt = st.text_input("Share with us your experience of the latest trip", "My trip was awesome")
+
+# Run the chain
+response = full_chain.invoke({"review": prompt})
+
+
+st.write(
+    response
+)
