@@ -35,7 +35,7 @@ positive_chain = PromptTemplate.from_template(
     Thank the customer for their review and for choosing to fly with the airline.
 
 Your response should follow these guidelines:
-    1. Do not provide any reasoning behind the need for visa. Just respond professionally as a travel chat agent.
+    1. Respond professionally as a travel chat agent.
     2. Address the customer directly.
     3. You are answering as a bot. Don't leave your name or end with anything like "Best Regards".
 
@@ -54,7 +54,7 @@ nofault_chain = PromptTemplate.from_template(
     Offer sympathies but explain to the customer that the airline is not liable in such situations.
 
 Your response should follow these guidelines:
-    1. Do not provide any reasoning behind the need for visa. Just respond professionally as a travel chat agent.
+    1. Respond professionally as a travel chat agent.
     2. Address the customer directly.
     3. You are answering as a bot. Don't leave your name or end with anything like "Best Regards".
 
@@ -74,7 +74,7 @@ fault_chain = PromptTemplate.from_template(
     Display a message offering sympathies and inform the user that customer service will contact them soon to resolve the issue or provide compensation.
 
 Your response should follow these guidelines:
-    1. Do not provide any reasoning behind the need for visa. Just respond professionally as a travel chat agent.
+    1. Respond professionally as a travel chat agent.
     2. Address the customer directly.
     3. You are answering as a bot. Don't leave your name or end with anything like "Best Regards".
 
